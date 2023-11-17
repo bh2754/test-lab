@@ -1,0 +1,58 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: databases
+  annotations:
+    kyverno.io/ignore: "true"
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:14.9-17
+  enableSuperuserAccess: true
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: 50Gi
+    storageClass: ceph-block
+  superuserSecret:
+    name: cloudnative-pg-secret
+  bootstrap:
+    recovery:
+      source: &previousCluster postgres-v1
+  postgresql:
+    parameters:
+      max_connections: "600"
+      shared_buffers: 512MB
+  monitoring:
+    enablePodMonitor: true
+  backup:
+    retentionPolicy: 30d
+    barmanObjectStore:
+      wal:
+        compression: bzip2
+        maxParallel: 8
+      destinationPath: s3://postg/
+      endpointURL: http://minio.bharris.co
+      serverName: &currentCluster postgres-v1
+      s3Credentials:
+        accessKeyId:
+          name: postgres-minio
+          key: MINIO_ACCESS_KEY
+        secretAccessKey:
+          name: postgres-minio
+          key: MINIO_SECRET_KEY
+# externalClusters:
+  # - name: *previousCluster
+    # barmanObjectStore:
+      # wal:
+        # compression: bzip2
+        # maxParallel: 8
+      # destinationPath: s3://postg/
+      # endpointURL: http://minio.bharris.co:9001
+      # s3Credentials:
+        # accessKeyId:
+          # name: postgres-minio
+          # key: MINIO_ACCESS_KEY
+        # secretAccessKey:
+          # name: postgres-minio
+          # key: MINIO_SECRET_KEY
