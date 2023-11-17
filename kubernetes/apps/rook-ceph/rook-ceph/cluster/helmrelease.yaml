@@ -64,9 +64,9 @@ spec:
           - name: master2
             devices:
               - name: "/dev/sdb"
-#         - name: master3
-#           devices:
-#             - name: "/dev/sdb"
+          - name: master3
+            devices:
+              - name: "/dev/sdb"
 #         - name: k8s-worker1
 #           devices:
 #             - name: "/dev/sdb"
