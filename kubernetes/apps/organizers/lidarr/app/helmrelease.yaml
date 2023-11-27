@@ -1,0 +1,114 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: &app lidarr
+  namespace: organizers
+spec:
+  interval: 5m
+  chart:
+    spec:
+      # renovate: registryUrl=https://k8s-at-home.com/charts/
+      chart: app-template
+      version: 2.0.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+      interval: 1m
+  install:
+    createNamespace: true
+    remediation:
+      retries: 5
+  upgrade:
+    remediation:
+      retries: 5
+  dependsOn:
+    - name: onepassword-connect
+      namespace: external-secrets
+    - name: pod-gateway
+      namespace: vpn
+    - name: rook-ceph-cluster
+      namespace: rook-ceph
+  values:
+    controllers:
+      main:
+        type: deployment
+        strategy: Recreate
+        annotations:
+          reloader.stakater.com/auto: "true"
+        pod:
+          annotations:
+            setGateway: "true"
+          securityContect:
+            runAsUser: 568
+            runAsGroup: 100   # was 568 before app template upgrade
+            fsGroup: 100
+            fsGroupChangePolicy: "OnRootMismatch"
+        containers:
+          main:
+            image:
+              repository: ghcr.io/bh2754/lidarr-nightly
+              tag: 1.5.1.3665@sha256:872c1149f1c24d4509ec2b146f23ebe40cfbb94adebcabe63147f7bf642f8929
+              pullPolicy: IfNotPresent
+            env:
+              TZ: ${TZ}
+              LIDARR__INSTANCE_NAME: Lidarr
+              LIDARR__PORT: &port 8686
+              LIDARR__LOG_LEVEL: info
+            envFrom:
+              - secretRef:
+                  name: lidarr-secret
+            resources:
+              requests:
+                cpu: 10m
+                memory: 1102M
+                ephemeral-storage: "2Gi"
+              limits:
+                memory: 1428M
+                ephemeral-storage: "4Gi"
+    service:
+      main:
+        ports:
+          http:
+            port: *port
+    metrics:
+      enabled: false
+    persistence:
+      config:
+        enabled: true
+        existingClaim: lidarr-config-v1
+      media:
+        enabled: true
+        type: nfs
+        server: ${NFS_SERVER}
+        path: ${NFS_MUSIC}
+      downloads:
+        enabled: true
+        type: nfs
+        server: ${NFS_SERVER}
+        path: /volume1/Download
+    ingress:
+      main:
+        enabled: true
+        className: "internal"
+        annotations:
+          external-dns.alpha.kubernetes.io/target: "external.${SECRET_DOMAIN}"
+        hosts:
+          - host: &host "lidarr.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                service:
+                  name: main
+                  prot: http
+        tls:
+          - hosts:
+              - *host
+    resources:
+      requests:
+        cpu: 10m
+        memory: 1102M
+        ephemeral-storage: "2Gi"
+      limits:
+        memory: 1428M
+        ephemeral-storage: "4Gi"

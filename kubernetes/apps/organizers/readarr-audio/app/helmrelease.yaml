@@ -1,0 +1,105 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: &app readarr-audio
+  namespace: organizers
+spec:
+  interval: 15m
+  chart:
+    spec:
+      chart: app-template
+      version: 2.0.3
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 5
+  upgrade:
+    remediation:
+      retries: 5
+  values:
+    controllers:
+      main:
+        type: deployment
+        annotations:
+          reloader.stakater.com/auto: "true"
+
+        pod:
+          annotations:
+            setGateway: "true"
+          securityContext:
+            runAsUser: 568
+            runAsGroup: 100   # was 568 before app template upgrade
+            fsGroup: 100
+            fsGroupChangePolicy: "OnRootMismatch"
+        containers:
+          main:
+            image:
+              repository: ghcr.io/bh2754/readarr-nightly
+              tag: 0.3.10.2287@sha256:3fad182ea5d9cb537d947e6f0bf1b49194771c0c76ad9b7ff744f3836a7e17a3
+            env:
+              READARR__INSTANCE_NAME: READARR-AUDIO
+              READARR__PORT: &port 80
+#             READARR__AUTHENTICATION_METHOD: External
+#             READARR__AUTHENTICATION_REQUIRED: DisabledForLocalAddresses
+#             READARR__APPLICATION_URL: "https://readarr.${SECRET_DOMAIN}"
+              READARR__LOG_LEVEL: info
+            envFrom:
+              - secretRef:
+                  name: readarr-audio-secret
+            resources:
+              requests:
+                cpu: 20m
+                memory: 323M
+              limits:
+                memory: 323M
+          netshoot:
+            image:
+              repository: ghcr.io/nicolaka/netshoot
+              tag: v0.11
+            command: ["/bin/bash"]
+            args: ["-c", "while true; do ping localhost; sleep 60;done"]
+
+    service:
+      main:
+        ports:
+          http:
+            port: *port
+
+    ingress:
+      main:
+        enabled: true
+        className: "internal"
+        annotations:
+          external-dns.alpha.kubernetes.io/target: "external.${SECRET_DOMAIN}"
+        hosts:
+          - host: &host "abs.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                service:
+                  name: main
+                  port: http
+        tls:
+          - hosts:
+              - *host
+
+    persistence:
+      config:
+        enabled: true
+        existingClaim: readarr-audio-config-v1
+      books:
+        enabled: true
+        type: nfs
+        server: &nas "${NFS_SERVER}"
+        path: ${NFS_MEDIA}/audiobooks
+        mountPath: /audiobooks
+      downloads:
+        enabled: true
+        type: nfs
+        server: *nas
+        path: ${NFS_DOWNLOAD}
+        mountPath: /downloads
