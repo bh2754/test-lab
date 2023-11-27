@@ -5,8 +5,8 @@ metadata:
   name: postgres-lb
   namespace: databases
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: postgres.bharris.vip
-    io.cilium/lb-ipam-ips: 10.0.111.26
+    external-dns.alpha.kubernetes.io/hostname: postgres.bharris.xyz
+    io.cilium/lb-ipam-ips: 10.0.112.26
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Cluster
