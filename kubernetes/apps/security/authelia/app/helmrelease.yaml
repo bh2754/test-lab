@@ -1,0 +1,167 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: authelia
+  namespace: security
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: app-template
+      version: 2.0.3
+      interval: 30m
+      sourceRef:
+        kind: HelmRepository
+        name: bjw-s
+        namespace: flux-system
+  dependsOn:
+    - name: cloudnative-pg
+      namespace: databases
+    - name: redis
+      namespace: databases
+    - name: onepassword-connect
+      namespace: external-secrets
+    - name: nginx-external
+      namespace: networking
+  values:
+    controllers:
+      main:
+        type: deployment
+        replicas: 3
+        strategy: RollingUpdate
+        annotations:
+          configmap.reloader.stakater.com/reload: authelia
+          secret.reloader.stakater.com/reload: authelia-secret
+        initContainers:
+          01-init-db:
+            image: 
+              repository: ghcr.io/bh2754/postgres-initdb
+              tag: 14.9
+            env:
+              - name: POSTGRES_HOST
+                value: postgres-rw.databases.svc.cluster.local
+              - name: POSTGRES_DB
+                value: authelia
+              - name: POSTGRES_SUPER_PASS
+                valueFrom:
+                  secretKeyRef:
+                    name: authelia-secret
+                    key: POSTGRES_PASS
+              - name: POSTGRES_USER
+                valueFrom:
+                  secretKeyRef:
+                    name: authelia-secret
+                    key: AUTHELIA_STORAGE_POSTGRES_USERNAME
+              - name: POSTGRES_PASS
+                valueFrom:
+                  secretKeyRef:
+                    name: authelia-secret
+                    key: AUTHELIA_STORAGE_POSTGRES_PASSWORD
+        containers:
+          main:
+            image:
+              repository: ghcr.io/authelia/authelia
+              tag: 4.37.5
+              pullPolicy: []
+            enableServiceLinks: false
+            env:
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_BASE_DN: dc=bharris,dc=co
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_DISPLAY_NAME_ATTRIBUTE: givenName
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_GROUPS_FILTER: "(&(member:1.2.840.113556.1.4.1941:={dn})(objectClass=group)(objectCategory=group))"
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_GROUP_NAME_ATTRIBUTE: cn
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_MAIL_ATTRIBUTE: mail
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_URL: "ldap://10.0.103.10:389"
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_USER: CN=Administrator,CN=Users,DC=bharris,DC=co
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_USERNAME_ATTRIBUTE: sAMAccountName
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_USERS_FILTER: "(&(|({username_attribute}={input})({mail_attribute}={input}))(objectCategory=person)(objectClass=user)(!userAccountControl:1.2.840.113556.1.4.803:=2)(!pwdLastSet=0))"
+              AUTHELIA_AUTHENTICATION_BACKEND_PASSWORD_RESET_DISABLE: "false"
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_IMPLEMENTATION: activedirectory
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_TLS_SKIP_VERIFY: "true"
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_TLS_MINIMUM_VERSION: TLS1.2
+              AUTHELIA_AUTHENTICATION_BACKEND_LDAP_START_TLS: "false"
+              AUTHELIA_DEFAULT_REDIRECTION_URL: "https://auth.${SECRET_DOMAIN}"
+              AUTHELIA_DUO_API_DISABLE: "true"
+              AUTHELIA_LOG_LEVEL: debug
+              AUTHELIA_NOTIFIER_SMTP_DISABLE_REQUIRE_TLS: "true"
+              AUTHELIA_NOTIFIER_SMTP_HOST: smtp.gmail.com
+              AUTHELIA_NOTIFIER_SMTP_PORT: 587
+              AUTHELIA_NOTIFIER_SMTP_SENDER: ${AUTHELIA_SENDER}
+              AUTHELIA_NOTIFIER_SMTP_USERNAME: bh2754@gmail.com
+              AUTHELIA_SERVER_DISABLE_HEALTHCHECK: "true"
+              AUTHELIA_SERVER_PORT: 80
+              AUTHELIA_SESSION_DOMAIN: "${SECRET_DOMAIN}"
+              AUTHELIA_SESSION_REDIS_HOST: redis.databases.svc.cluster.local
+              AUTHELIA_SESSION_REDIS_PORT: 6379
+              AUTHELIA_STORAGE_POSTGRES_DATABASE: authelia
+              AUTHELIA_STORAGE_POSTGRES_HOST: postgres-rw.databases.svc
+              AUTHELIA_TELEMETRY_METRICS_ADDRESS: "tcp://0.0.0.0:8080"
+              AUTHELIA_TELEMETRY_METRICS_ENABLED: "true"
+              AUTHELIA_THEME: dark
+              AUTHELIA_TOTP_ISSUER: authelia.com
+              AUTHELIA_WEBAUTHN_DISABLE: "false"
+
+            envFrom:
+              - secretRef:
+                  name: authelia-secret
+            pod:
+              enableServiceLinks: false
+              securityContect:
+                runAsUser: 568
+                runAsGroup: 568
+                fsGroup: 568
+                fsGroupChangePolicy: "OnRootMismatch"
+              topologySpreadConstraints:
+                - maxSkew: 2
+                  topologyKey: kubernetes.io/hostname
+                  whenUnsatisfiable: DoNotSchedule
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/name: authelia
+
+    service:
+      main:
+        ports:
+          http:
+            port: 80
+
+    ingress:
+    
+      main:
+        enabled: true
+        className: "external"
+        annotations:
+          external-dns.alpha.kubernetes.io/target: "external.${SECRET_DOMAIN}"
+        hosts:
+          - host: &host "auth.${SECRET_DOMAIN}"
+            paths:
+              - path: /
+                service:
+                  name: main
+                  port: http
+        tls:
+          - hosts:
+              - *host
+    persistence:
+      config:
+        enabled: true
+        type: configMap
+        name: authelia
+        subPath: configuration.yml
+        mountPath: /config/configuration.yml
+        readOnly: false
+
+    resources:
+      requests:
+        cpu: 10m
+        memory: 50Mi
+      limits:
+        memory: 250Mi
+
+    topologySpreadConstraints:
+      - maxSkew: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: authelia
