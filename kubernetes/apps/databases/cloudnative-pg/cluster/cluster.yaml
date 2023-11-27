@@ -42,7 +42,7 @@ spec:
           name: postgres-minio
           key: MINIO_SECRET_KEY
   externalClusters:
-    - name: *previousCluster
+    - name: postgres-v1
       barmanObjectStore:
         wal:
           compression: bzip2
