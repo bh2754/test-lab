@@ -8,21 +8,13 @@ metadata:
     kyverno.io/ignore: "true"
 spec:
   instances: 3
-  imageName: ghcr.io/cloudnative-pg/postgresql:14.9-17
-  enableSuperuserAccess: true
+  imageName: ghcr.io/cloudnative-pg/postgresql:14.6
   primaryUpdateStrategy: unsupervised
   storage:
     size: 50Gi
     storageClass: ceph-block
   superuserSecret:
-    name: cloudnative-pg-secret
-# bootstrap:
-  # recovery:
-    # source: &previousCluster postgres-v1
-  postgresql:
-    parameters:
-      max_connections: "600"
-      shared_buffers: 512MB
+    name: postgres-superuser
   monitoring:
     enablePodMonitor: true
   backup:
@@ -32,8 +24,8 @@ spec:
         compression: bzip2
         maxParallel: 8
       destinationPath: s3://postg/
-      endpointURL: http://minio.bharris.co
-      serverName: &currentCluster postgres-v1
+      endpointURL: http://minio.bharris.co:9001
+      serverName: postgres-v1
       s3Credentials:
         accessKeyId:
           name: postgres-minio
@@ -41,18 +33,19 @@ spec:
         secretAccessKey:
           name: postgres-minio
           key: MINIO_SECRET_KEY
-  externalClusters:
-    - name: postgres-v1
-      barmanObjectStore:
-        wal:
-          compression: bzip2
-          maxParallel: 8
-        destinationPath: s3://postg/
-        endpointURL: http://minio.bharris.co:9001
-        s3Credentials:
-          accessKeyId:
-            name: postgres-minio
-            key: MINIO_ACCESS_KEY
-          secretAccessKey:
-            name: postgres-minio
-            key: MINIO_SECRET_KEY
+  # # Note: externalClusters is needed when recovering from an existing cnpg cluster
+  # externalClusters:
+  #   - name: postgres-v1
+  #     barmanObjectStore:
+  #       wal:
+  #         compression: bzip2
+  #         maxParallel: 8
+  #       destinationPath: s3://postgresql/
+  #       endpointURL: http://minio.bharris.co:9001
+  #       s3Credentials:
+  #         accessKeyId:
+  #           name: postgres-minio
+  #           key: MINIO_ACCESS_KEY
+  #         secretAccessKey:
+  #           name: postgres-minio
+  #           key: MINIO_SECRET_KEY
