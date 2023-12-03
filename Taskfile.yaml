@@ -15,12 +15,15 @@ env:
   ANSIBLE_COLLECTIONS_PATH: "{{.ROOT_DIR}}/.venv/galaxy"
   ANSIBLE_ROLES_PATH: "{{.ROOT_DIR}}/.venv/galaxy/ansible_roles"
   ANSIBLE_VARS_ENABLED: "host_group_vars,community.sops.sops"
-  K8S_AUTH_KUBECONFIG: "{{.ROOT_DIR}}/kubeconfig"
+  K8S_AUTH_KUBECONFIG: "{{.ROOT_DIR}}/provision/kubeconfig"
 
 includes:
   ansible: .taskfiles/AnsibleTasks.yaml
   brew: .taskfiles/BrewTasks.yaml
   cluster: .taskfiles/ClusterTasks.yaml
+  sops: .taskfiles/SopsTasks.yml
+  es: .taskfiles/ExternalSecrets/Tasks.yml
+
 
 tasks:
 
