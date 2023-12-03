@@ -60,7 +60,7 @@ spec:
 #                   key: AUTHELIA_STORAGE_POSTGRES_PASSWORD
             envFrom:
               - secretRef:
-                  name: authlia-secret
+                  name: authelia-secret
         containers:
           main:
             image:
