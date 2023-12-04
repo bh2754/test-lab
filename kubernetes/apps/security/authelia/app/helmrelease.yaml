@@ -129,7 +129,6 @@ spec:
             port: 80
 
     ingress:
-    
       main:
         enabled: true
         className: "external"
