@@ -1,4 +1,5 @@
 ---
+# yaml-language-server: $schema=https://kubernetes-schemas.devbu.io/helmrelease_v2beta1.json
 apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
@@ -22,12 +23,10 @@ spec:
   upgrade:
     remediation:
       retries: 3
-  dependsOn:
-    - name: external-secrets
-      namespace: external-secrets
   values:
     controllers:
       main:
+        type: deployment
         annotations:
           reloader.stakater.com/auto: "true"
         pod:
@@ -37,7 +36,7 @@ spec:
         containers:
           main:
             image:
-              repository: docker.io/1password/connect-api
+              repository: ghcr.io/onedr0p/onepassword-connect-api
               tag: 1.7.2
               pullPolicy: IfNotPresent
             env:
@@ -49,6 +48,12 @@ spec:
                   secretKeyRef:
                     name: onepassword-connect-secret
                     key: 1password-credentials.json
+            resources:
+              requests:
+                cpu: 5m
+                memory: 10Mi
+              limits:
+                memory: 100Mi
             probes:
               liveness:
                 enabled: true
@@ -70,50 +75,53 @@ spec:
                   initialDelaySeconds: 15
               startup:
                 enabled: false
+
+          sync:
+            image:
+              repository: ghcr.io/onedr0p/onepassword-sync
+              tag: 1.7.2
+            env:
+              - name: OP_SESSION
+                valueFrom:
+                  secretKeyRef:
+                    name: onepassword-connect-secret
+                    key: 1password-credentials.json
+              - name: OP_HTTP_PORT
+                value: &syncport 8081
+              - name: OP_BUS_PORT
+                value: "11221"
+              - name: OP_BUS_PEERS
+                value: "localhost:11220"
+            probes:
+              readinessProbe:
+                httpGet:
+                  path: /health
+                  port: *syncport
+                initialDelaySeconds: 15
+              livenessProbe:
+                httpGet:
+                  path: /heartbeat
+                  port: *syncport
+                failureThreshold: 3
+                periodSeconds: 30
+                initialDelaySeconds: 15
             resources:
               requests:
                 cpu: 5m
                 memory: 10Mi
               limits:
-                memory: 100Mi
-#         sync:
-            # image: docker.io/1password/connect-sync:1.7.0
-#           image:
-#             repository: ghcr.io/haraldkoch/onepassword-sync
-#             tag: 1.7.2
-#           env:
-#             - { name: OP_HTTP_PORT, value: &sport 8081 }
-#             - { name: OP_BUS_PORT, value: "11221" }
-#             - { name: OP_BUS_PEERS, value: "localhost:11220" }
-#             - name: OP_SESSION
-#               valueFrom:
-#                 secretKeyRef:
-#                   name: onepassword-connect-secret
-#                   key: onepassword-credentials.json
-#           readinessProbe:
-#             httpGet:
-#               path: /health
-#               port: *sport
-#             initialDelaySeconds: 15
-#           livenessProbe:
-#             httpGet:
-#               path: /heartbeat
-#               port: *sport
-#             failureThreshold: 3
-#             periodSeconds: 30
-#             initialDelaySeconds: 15
+                memory: 50Mi
 
     service:
       main:
         ports:
           http:
             port: *port
+
     ingress:
       main:
         enabled: true
-        className: internal
-        annotations:
-          hajimari.io/enable: "false"
+        ingressClassName: internal
         hosts:
           - host: &host "{{ .Release.Name }}.${SECRET_DOMAIN}"
             paths:
@@ -127,6 +135,9 @@ spec:
     persistence:
       shared:
         type: emptyDir
-        globalMounts:
-          - path: /home/opuser/.op/data
-
+        advancedMounts:
+          main:
+            main:
+              - path: /home/opuser/.op/data
+            sync:
+              - path: /home/opuser/.op/data
