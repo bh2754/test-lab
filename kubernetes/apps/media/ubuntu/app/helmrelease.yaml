@@ -9,18 +9,35 @@ spec:
   chart:
     spec:
       chart: app-template
-      version: 1.5.1
+      version: 2.3.0
       interval: 15m
       sourceRef:
         kind: HelmRepository
         name: bjw-s
         namespace: flux-system
   # See https://github.com/bjw-s/helm-charts/blob/main/charts/library/common/values.yaml
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
   values:
-    image:
-      repository: docker.io/dorowu/ubuntu-desktop-lxde-vnc
-      tag: latest@sha256:775184eaa5bbc01bc4261a6c9596a642b3b43a433c1508637567bc724575964b
-
+    controllers:
+      main:
+        containers:
+          main:
+            image:
+              repository: docker.io/dorowu/ubuntu-desktop-lxde-vnc
+              tag: latest@sha256:775184eaa5bbc01bc4261a6c9596a642b3b43a433c1508637567bc724575964b
+            securityContext:
+              runAsUser: 0
+              runAsGroup: 0
+              fsGroup: 0
     service:
       main:
         ports:
@@ -33,26 +50,18 @@ spec:
     ingress:
       main:
         enabled: true
-        ingressClassName: internal
+        className: internal
         annotations:
-#         external-dns.alpha.kubernetes.io/target: "external.${SECRET_DOMAIN}"
-#         nginx.ingress.kubernetes.io/auth-method: GET
-#         nginx.ingress.kubernetes.io/auth-url: http://authelia.security.svc.cluster.local/api/verify
-#         nginx.ingress.kubernetes.io/auth-signin: https://auth.bharris.vip?rm=$request_method
-#         nginx.ingress.kubernetes.io/auth-response-headers: Remote-User,Remote-Name,Remote-Groups,Remote-Email
-#         nginx.ingress.kubernetes.io/auth-snippet: proxy_set_header X-Forwarded-Method $request_method;
           hajimari.io/enable: "true"
           hajimari.io/icon: logos:ubuntu
         hosts:
           - host: &host "ubuntu.${SECRET_DOMAIN}"
             paths:
               - path: /
-                pathType: Prefix
+                service:
+                  name: main
+                  port: http
         tls:
           - hosts:
               - *host
 
-    podSecurityContext:
-      runAsUser: 0
-      runAsGroup: 0
-      fsGroup: 0
