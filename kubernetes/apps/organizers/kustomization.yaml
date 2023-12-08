@@ -5,7 +5,7 @@ resources:
   # Flux-Kustomizations
 # - ./lidarr/ks.yaml
 # - ./prowlarr/ks.yaml
-  - ./sonarr/ks.yaml
+# - ./sonarr/ks.yaml
 # - ./radarr/ks.yaml
 # - ./readarr/ks.yaml
 # - ./readarr-audio/ks.yaml
