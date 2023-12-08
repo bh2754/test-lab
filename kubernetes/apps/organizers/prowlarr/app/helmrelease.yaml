@@ -21,6 +21,15 @@ spec:
   upgrade:
     remediation:
       retries: 5
+  dependsOn:
+    - name: onepassword-connect
+      namespace: external-secrets
+    - name: nginx-external
+      namespace: networking
+    - name: authelia
+      namespace: security
+    - name: rook-ceph-cluster
+      namespace: rook-ceph
   values:
     controllers:
       main:
